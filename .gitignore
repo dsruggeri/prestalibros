@@ -1,0 +1,5 @@
+.claude/
+.vscode/
+*.psd
+Thumbs.db
+.DS_Store
