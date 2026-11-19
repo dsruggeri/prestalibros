@@ -83,6 +83,27 @@ export function initials(name = "") {
   return name.trim().split(/\s+/).slice(0, 2).map((w) => w[0] || "").join("").toUpperCase();
 }
 
+// Convierte un teléfono como lo guarda la gente en Argentina
+// ("011 15-1234-5678", "11 1234 5678", "+54 9 11…") al formato de wa.me (5491112345678).
+export function waNumber(tel = "") {
+  const plus = tel.trim().startsWith("+");
+  let d = tel.replace(/\D/g, "");
+  if (!d) return "";
+  if (plus || d.startsWith("54")) {
+    // celulares argentinos necesitan el 9 después del 54
+    if (d.startsWith("54") && !d.startsWith("549") && d.length === 12) d = "549" + d.slice(2);
+    return d;
+  }
+  if (d.startsWith("0")) d = d.slice(1);
+  if (d.length === 12) {
+    // característica (2 a 4 dígitos) + "15" + número → sacar el 15
+    for (const k of [2, 3, 4]) {
+      if (d.slice(k, k + 2) === "15") { d = d.slice(0, k) + d.slice(k + 2); break; }
+    }
+  }
+  return d.length === 10 ? "549" + d : d;
+}
+
 export function uuid() {
   if (crypto.randomUUID) return crypto.randomUUID();
   return "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (c) =>

@@ -4,6 +4,7 @@
 
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
 import { uuid } from "./util.js";
+import { blobToDataUrl } from "./imagen.js";
 
 const SUPABASE_JS = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm";
 export const TABLES = ["contactos", "libros", "prestamos"];
@@ -133,6 +134,30 @@ export async function remove(table, id) {
   }
   const { error } = await sb.from(table).delete().eq("id", id);
   if (error) throw friendly(error);
+}
+
+// ── Fotos de portada ─────────────────────────────────────────────────────
+const BUCKET = "portadas";
+const PUBLIC_MARK = `/storage/v1/object/public/${BUCKET}/`;
+
+// Sube una portada (JPEG ya procesado) y devuelve su URL.
+export async function uploadCover(blob) {
+  if (mode === "local") return blobToDataUrl(blob);
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) throw new Error("Tu sesión expiró. Volvé a entrar.");
+  const path = `${session.user.id}/${uuid()}.jpg`;
+  const { error } = await sb.storage.from(BUCKET).upload(path, blob, {
+    contentType: "image/jpeg", cacheControl: "31536000", upsert: false,
+  });
+  if (error) throw friendly(error);
+  return sb.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
+}
+
+// Borra una portada subida por nosotros (ignora links externos y errores).
+export async function removeCover(url) {
+  if (mode === "local" || !url || !url.includes(PUBLIC_MARK)) return;
+  const path = url.slice(url.indexOf(PUBLIC_MARK) + PUBLIC_MARK.length);
+  try { await sb.storage.from(BUCKET).remove([path]); } catch {}
 }
 
 // Importa un backup (agrega o actualiza por id; no borra nada).

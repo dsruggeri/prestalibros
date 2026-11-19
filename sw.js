@@ -2,10 +2,10 @@
 // Estrategia "red primero": siempre intenta traer la última versión y,
 // si no hay internet, usa la copia guardada.
 
-const CACHE = "prestalibros-v3";
+const CACHE = "prestalibros-v4";
 const SHELL = [
   "./", "index.html", "css/app.css", "manifest.webmanifest", "icons/icon.svg",
-  "js/app.js", "js/db.js", "js/util.js", "js/isbn.js", "js/scanner.js", "js/config.js",
+  "js/app.js", "js/db.js", "js/util.js", "js/isbn.js", "js/scanner.js", "js/config.js", "js/imagen.js",
 ];
 
 self.addEventListener("install", (e) => {

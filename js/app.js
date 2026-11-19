@@ -1,10 +1,11 @@
 import * as db from "./db.js";
 import {
   html, raw, today, addDays, daysBetween, daysSince, fmtDate, hace, plural,
-  hue, normalize, initials, toast, openSheet, confirmSheet,
+  hue, normalize, initials, toast, openSheet, confirmSheet, waNumber,
 } from "./util.js";
 import { normalizeIsbn, cleanIsbn, lookupIsbn } from "./isbn.js";
 import { scanIsbn } from "./scanner.js";
+import { prepararPortada } from "./imagen.js";
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -69,7 +70,40 @@ const I = {
   download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>',
   upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>',
   logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
+  camera: '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3"/>',
+  image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/>',
+  contact: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4"/><circle cx="12" cy="11" r="3"/><path d="M7 19a5 5 0 0 1 10 0"/>',
 };
+
+// ── Agenda del celular (Contact Picker API: Chrome en Android) ───────────
+const agendaDisponible = () => "contacts" in navigator && "ContactsManager" in window;
+
+async function elegirDeAgenda() {
+  try {
+    const props = await navigator.contacts.getProperties?.() ?? ["name", "tel", "email"];
+    const pedir = ["name", "tel", "email"].filter((p) => props.includes(p));
+    const [c] = await navigator.contacts.select(pedir, { multiple: false });
+    if (!c) return null;
+    const nombre = (c.name?.[0] || "").trim();
+    return {
+      nombre,
+      telefono: (c.tel?.[0] || "").trim(),
+      email: (c.email?.[0] || "").trim(),
+    };
+  } catch (e) {
+    console.error(e);
+    toast("No se pudo abrir la agenda", "error");
+    return null;
+  }
+}
+
+const soloDigitos = (t = "") => t.replace(/\D/g, "").slice(-8); // últimos 8: ignora prefijos
+function buscarContacto({ nombre = "", telefono = "" }) {
+  const n = normalize(nombre.trim());
+  const t = soloDigitos(telefono);
+  return state.contactos.find((c) =>
+    (n && normalize(c.nombre.trim()) === n) || (t.length === 8 && soloDigitos(c.telefono || "") === t));
+}
 const icon = (n) => raw(`<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${I[n]}</svg>`);
 
 // ═══ Componentes ═════════════════════════════════════════════════════════
@@ -113,8 +147,7 @@ function waLink(p) {
   const cuando = dias <= 1 ? hace(dias) : `${hace(dias)} (el ${fmtDate(p.fecha_prestamo)})`;
   const msg = `¡Hola ${nombre}! ¿Cómo va? Te escribo por "${l?.titulo}", que te presté ${cuando}. ` +
     `¿Me lo podrías devolver cuando lo termines? ¡Gracias! 📚`;
-  const tel = (c?.telefono || "").replace(/\D/g, "");
-  return `https://wa.me/${tel}?text=${encodeURIComponent(msg)}`;
+  return `https://wa.me/${waNumber(c?.telefono)}?text=${encodeURIComponent(msg)}`;
 }
 
 function loanCard(p, { showFriend = true } = {}) {
@@ -288,7 +321,7 @@ function viewLibro(id) {
     action: html`<a class="icon-btn" href="#/editar/${id}" aria-label="Editar">${icon("edit")}</a>`,
     html: html`
       <div class="detail-head">
-        ${cover(l, "lg")}
+        <a href="#/editar/${id}" aria-label="Cambiar portada">${cover(l, "lg")}</a>
         <div class="detail-info">
           <h2 class="detail-title">${l.titulo}</h2>
           ${l.autores ? html`<p class="detail-author">${l.autores}</p>` : ""}
@@ -338,7 +371,11 @@ function viewLibro(id) {
           ok: "Eliminar", danger: true,
         });
         if (!ok) return;
-        if (await run(() => db.remove("libros", id), "Libro eliminado") !== FAIL) location.replace("#/libros");
+        const r = await run(async () => {
+          await db.remove("libros", id);
+          db.removeCover(l.portada_url);
+        }, "Libro eliminado");
+        if (r !== FAIL) location.replace("#/libros");
       });
     },
   };
@@ -356,6 +393,7 @@ function prestarSheet(libro) {
       <label>¿A quién?
         <input name="nombre" list="dl-contactos" required autocomplete="off" placeholder="Nombre de tu amigo/a">
       </label>
+      ${agendaDisponible() ? html`<button type="button" class="btn ghost" data-act="agenda">${icon("contact")} Elegir de mis contactos</button>` : ""}
       <datalist id="dl-contactos">${state.contactos.map((c) => html`<option value="${c.nombre}">`)}</datalist>
       ${recientes.length ? html`<div class="chips">${recientes.map((c) =>
         html`<button type="button" class="chip" data-nombre="${c.nombre}">${c.nombre}</button>`)}</div>` : ""}
@@ -380,12 +418,22 @@ function prestarSheet(libro) {
     </form>`), (dlg, close) => {
     const f = $("#prestar-form", dlg);
     const phone = $(".phone-field", dlg);
-    const find = (n) => state.contactos.find((c) => normalize(c.nombre.trim()) === normalize(n.trim()));
-    const sync = () => { phone.hidden = !f.nombre.value.trim() || !!find(f.nombre.value); };
-    f.nombre.addEventListener("input", sync);
+    let deAgenda = null; // datos traídos de la agenda del celular
+    const find = () => buscarContacto({ nombre: f.nombre.value, telefono: deAgenda?.telefono });
+    const sync = () => { phone.hidden = !f.nombre.value.trim() || !!find(); };
+    f.nombre.addEventListener("input", () => { deAgenda = null; sync(); });
     $$("[data-nombre]", dlg).forEach((b) => b.addEventListener("click", () => {
-      f.nombre.value = b.dataset.nombre; sync();
+      f.nombre.value = b.dataset.nombre; deAgenda = null; sync();
     }));
+    $("[data-act=agenda]", dlg)?.addEventListener("click", async () => {
+      const c = await elegirDeAgenda();
+      if (!c) return;
+      deAgenda = c;
+      const existente = find();
+      f.nombre.value = existente?.nombre || c.nombre;
+      f.telefono.value = c.telefono;
+      sync();
+    });
     f.addEventListener("submit", async (ev) => {
       ev.preventDefault();
       const nombre = f.nombre.value.trim();
@@ -394,8 +442,17 @@ function prestarSheet(libro) {
       const btn = $("[type=submit]", f);
       btn.disabled = true;
       const r = await run(async () => {
-        let c = find(nombre);
-        if (!c) c = await db.insert("contactos", { nombre, telefono: f.telefono.value.trim() || null });
+        let c = find();
+        if (!c) {
+          c = await db.insert("contactos", {
+            nombre, telefono: f.telefono.value.trim() || null, email: deAgenda?.email || null,
+          });
+        } else if (deAgenda && ((!c.telefono && deAgenda.telefono) || (!c.email && deAgenda.email))) {
+          // completar datos que faltaban con lo que trae la agenda
+          await db.update("contactos", c.id, {
+            telefono: c.telefono || deAgenda.telefono || null, email: c.email || deAgenda.email || null,
+          });
+        }
         await db.insert("prestamos", {
           libro_id: libro.id, contacto_id: c.id, fecha_prestamo: fecha,
           fecha_limite: addDays(fecha, plazo), notas: f.notas.value.trim() || null,
@@ -452,6 +509,12 @@ function viewForm(id, opts = {}) {
 
         <div class="form-cover">
           <div id="cover-preview"></div>
+          <div class="cover-actions">
+            <label class="btn ghost sm">${icon("camera")} Sacar foto
+              <input type="file" accept="image/*" capture="environment" hidden data-pick></label>
+            <label class="btn ghost sm">${icon("image")} Elegir imagen
+              <input type="file" accept="image/*" hidden data-pick></label>
+          </div>
           <button type="button" class="link small" data-act="quitar-portada" hidden>Quitar portada</button>
         </div>
 
@@ -479,14 +542,34 @@ function viewForm(id, opts = {}) {
       const f = $("#book-form", root);
       const status = $(".lookup", root);
       const quitar = $("[data-act=quitar-portada]", root);
+      // Foto propia: se guarda en memoria y se sube recién al tocar "Guardar".
+      let fotoNueva = null;
+      let fotoUrl = null;
+      const setFoto = (blob) => {
+        if (fotoUrl) URL.revokeObjectURL(fotoUrl);
+        fotoNueva = blob;
+        fotoUrl = blob ? URL.createObjectURL(blob) : null;
+      };
       const preview = () => {
         const titulo = f.titulo.value.trim() || "Sin título";
-        $("#cover-preview", root).innerHTML = String(cover({ titulo, portada_url: f.portada_url.value }, "md"));
-        quitar.hidden = !f.portada_url.value;
+        const portada_url = fotoUrl || f.portada_url.value;
+        $("#cover-preview", root).innerHTML = String(cover({ titulo, portada_url }, "md"));
+        quitar.hidden = !portada_url;
       };
       preview();
       f.titulo.addEventListener("input", preview);
-      quitar.addEventListener("click", () => { f.portada_url.value = ""; preview(); });
+      quitar.addEventListener("click", () => { setFoto(null); f.portada_url.value = ""; preview(); });
+      $$("[data-pick]", root).forEach((input) => input.addEventListener("change", async () => {
+        const file = input.files[0];
+        input.value = "";
+        if (!file) return;
+        try {
+          setFoto(await prepararPortada(file));
+          preview();
+        } catch (e) {
+          toast(e.message || "No se pudo usar esa imagen", "error");
+        }
+      }));
 
       let lastLooked = "";
       const lookup = async (isbn) => {
@@ -500,6 +583,7 @@ function viewForm(id, opts = {}) {
         if (f.isbn.value !== isbn) return;
         if (data) {
           for (const k of ["titulo", "autores", "editorial", "anio", "portada_url"]) {
+            if (k === "portada_url" && fotoNueva) continue; // no pisar la foto propia
             if (data[k] && (!editing || !f[k].value)) f[k].value = data[k];
           }
           preview();
@@ -556,8 +640,14 @@ function viewForm(id, opts = {}) {
         };
         const otro = ev.submitter?.value === "otro";
         $$("[type=submit]", f).forEach((b) => (b.disabled = true));
-        const saved = await run(() => editing ? db.update("libros", id, row) : db.insert("libros", row),
-          editing ? "Cambios guardados" : `«${titulo}» ya está en tu biblioteca`);
+        if (fotoNueva) toast("Subiendo la foto…");
+        const saved = await run(async () => {
+          if (fotoNueva) row.portada_url = await db.uploadCover(fotoNueva);
+          const r = editing ? await db.update("libros", id, row) : await db.insert("libros", row);
+          if (editing?.portada_url && editing.portada_url !== row.portada_url) db.removeCover(editing.portada_url);
+          return r;
+        }, editing ? "Cambios guardados" : `«${titulo}» ya está en tu biblioteca`);
+        if (saved !== FAIL) setFoto(null);
         if (saved === FAIL) { $$("[type=submit]", f).forEach((b) => (b.disabled = false)); return; }
         if (otro) {
           // run() ya volvió a dibujar el formulario vacío
@@ -642,7 +732,7 @@ function viewAmigo(id) {
         ${c.notas ? html`<p class="small note">${c.notas}</p>` : ""}
         <div class="btn-row center">
           ${tel ? html`<a class="btn ghost" href="tel:${tel}">${icon("phone")} Llamar</a>
-                      <a class="btn wa-btn" href="https://wa.me/${tel.replace(/\D/g, "")}" target="_blank" rel="noopener">${icon("chat")} WhatsApp</a>`
+                      <a class="btn wa-btn" href="https://wa.me/${waNumber(c.telefono)}" target="_blank" rel="noopener">${icon("chat")} WhatsApp</a>`
                 : html`<button class="btn ghost" data-act="editar">${icon("phone")} Agregar teléfono</button>`}
         </div>
       </div>
@@ -670,9 +760,10 @@ function contactoSheet(c = null) {
   openSheet(String(html`
     <h2 class="sheet-title">${c ? "Editar" : "Nuevo amigo/a"}</h2>
     <form class="form" id="c-form">
+      ${agendaDisponible() ? html`<button type="button" class="btn ghost" data-act="agenda">${icon("contact")} ${c ? "Completar desde mis contactos" : "Elegir de mis contactos"}</button>` : ""}
       <label>Nombre *<input name="nombre" required value="${c?.nombre || ""}"></label>
       <label>WhatsApp / teléfono<input name="telefono" type="tel" inputmode="tel" placeholder="+54 9 11 1234 5678" value="${c?.telefono || ""}"></label>
-      <p class="hint">Con código de país (+54 9…) para que funcione el botón de WhatsApp.</p>
+      <p class="hint">Como lo tengas agendado (011 15…, 11…, +54 9…): la app lo adapta para WhatsApp.</p>
       <label>Email<input name="email" type="email" value="${c?.email || ""}"></label>
       <label>Notas<input name="notas" value="${c?.notas || ""}" placeholder="Ej.: compañero del club de lectura"></label>
       <div class="sheet-actions">
@@ -680,6 +771,18 @@ function contactoSheet(c = null) {
         <button type="submit" class="btn primary">Guardar</button>
       </div>
     </form>`), (dlg, close) => {
+    $("[data-act=agenda]", dlg)?.addEventListener("click", async () => {
+      const a = await elegirDeAgenda();
+      if (!a) return;
+      const f = $("#c-form", dlg);
+      if (!c || !f.nombre.value.trim()) f.nombre.value = a.nombre;
+      if (a.telefono) f.telefono.value = a.telefono;
+      if (a.email) f.email.value = a.email;
+      if (!c) {
+        const dup = buscarContacto(a);
+        if (dup) toast(`Ojo: ya tenés a ${dup.nombre} en tus amigos`, "error");
+      }
+    });
     $("#c-form", dlg).addEventListener("submit", async (ev) => {
       ev.preventDefault();
       const f = ev.target;
