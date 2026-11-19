@@ -15,4 +15,5 @@ export const SUPABASE_ANON_KEY =
 // Opcional: clave gratuita de Google Books (console.cloud.google.com → APIs →
 // "Books API" → Credenciales). Sin clave también funciona, pero comparte un
 // cupo diario con todo el mundo y a veces se agota.
-export const GOOGLE_BOOKS_KEY = "";
+// Esta clave está restringida a la Books API y a dsruggeri.github.io / localhost:5500.
+export const GOOGLE_BOOKS_KEY = "AIzaSyAkb904OrELNfj-C8_sElME3JUk1GCnw94";

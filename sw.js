@@ -2,7 +2,7 @@
 // Estrategia "red primero": siempre intenta traer la última versión y,
 // si no hay internet, usa la copia guardada.
 
-const CACHE = "prestalibros-v1";
+const CACHE = "prestalibros-v2";
 const SHELL = [
   "./", "index.html", "css/app.css", "manifest.webmanifest", "icons/icon.svg",
   "js/app.js", "js/db.js", "js/util.js", "js/isbn.js", "js/scanner.js", "js/config.js",
