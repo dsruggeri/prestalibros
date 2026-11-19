@@ -16,7 +16,22 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/app.css">
+  <link rel="stylesheet" href="css/app.css?v=5">
+  <!-- Versión de los archivos: subir el número en cada publicación para que
+       el navegador nunca mezcle archivos viejos y nuevos. -->
+  <script type="importmap">
+  {
+    "imports": {
+      "./js/app.js": "./js/app.js?v=5",
+      "./js/db.js": "./js/db.js?v=5",
+      "./js/util.js": "./js/util.js?v=5",
+      "./js/isbn.js": "./js/isbn.js?v=5",
+      "./js/scanner.js": "./js/scanner.js?v=5",
+      "./js/imagen.js": "./js/imagen.js?v=5",
+      "./js/config.js": "./js/config.js?v=5"
+    }
+  }
+  </script>
 </head>
 <body>
   <header class="topbar">
@@ -39,6 +54,6 @@
 
   <div id="toast" class="toast" role="status"></div>
 
-  <script type="module" src="js/app.js"></script>
+  <script type="module">import "./js/app.js";</script>
 </body>
 </html>

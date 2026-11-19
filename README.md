@@ -5,6 +5,8 @@ a quién, desde cuándo, cuánto hace que lo tiene y cuándo conviene reclamarlo
 
 - Carga de libros escaneando el código de barras o escribiendo el ISBN
   (los datos y la portada se buscan solos en Google Books y Open Library).
+- Portada propia: sacarle una foto al libro o elegir una imagen.
+- Amigos desde la agenda del celular (Chrome en Android).
 - Préstamos con fecha y plazo; colores verde / amarillo / rojo según cuánto falta.
 - Botón para reclamar por WhatsApp con el mensaje ya escrito.
 - Historial por libro y por amigo.
@@ -62,6 +64,11 @@ funciona en **modo local** (los datos quedan solo en ese navegador).
 ### 4. En el celular
 Abrir la dirección en Chrome (Android) o Safari (iPhone) → menú → **Agregar a
 pantalla de inicio**. Queda como una app más, con su ícono.
+
+## Publicar una actualización
+1. Subir el número `?v=` en `index.html` (en el `importmap` y en el CSS) y el nombre
+   del caché en `sw.js`. Así el navegador nunca mezcla archivos viejos y nuevos.
+2. `git commit` y `git push`: GitHub Pages publica solo en 1–2 minutos.
 
 ## Ideas para más adelante
 - Recordatorio automático por mail de los préstamos vencidos (función programada en Supabase).

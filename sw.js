@@ -2,7 +2,7 @@
 // Estrategia "red primero": siempre intenta traer la última versión y,
 // si no hay internet, usa la copia guardada.
 
-const CACHE = "prestalibros-v4";
+const CACHE = "prestalibros-v5";
 const SHELL = [
   "./", "index.html", "css/app.css", "manifest.webmanifest", "icons/icon.svg",
   "js/app.js", "js/db.js", "js/util.js", "js/isbn.js", "js/scanner.js", "js/config.js", "js/imagen.js",
@@ -32,6 +32,6 @@ self.addEventListener("fetch", (e) => {
         caches.open(CACHE).then((c) => c.put(e.request, copy));
         return res;
       })
-      .catch(() => caches.match(e.request).then((r) => r || caches.match("index.html"))),
+      .catch(() => caches.match(e.request, { ignoreSearch: true }).then((r) => r || caches.match("index.html"))),
   );
 });
