@@ -8,8 +8,9 @@
 // La clave "anon" es pública por diseño: la seguridad la dan las reglas
 // (Row Level Security) definidas en supabase/schema.sql.
 
-export const SUPABASE_URL = "";
-export const SUPABASE_ANON_KEY = "";
+export const SUPABASE_URL = "https://rujqntzszuyykqdvulmp.supabase.co";
+export const SUPABASE_ANON_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ1anFudHpzenV5eWtxZHZ1bG1wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTUxMjU0MTYsImV4cCI6MjExMDcwMTQxNn0.eoLKI6gNK1fR4eOp8Ol7L4H4brfOsBMSCeH5nBQqwGM";
 
 // Opcional: clave gratuita de Google Books (console.cloud.google.com → APIs →
 // "Books API" → Credenciales). Sin clave también funciona, pero comparte un

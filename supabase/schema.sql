@@ -54,6 +54,11 @@ create index if not exists contactos_user_idx on public.contactos (user_id);
 create index if not exists prestamos_user_idx on public.prestamos (user_id);
 
 -- ── Seguridad: cada usuario ve y toca solo lo suyo ──────────────────────
+-- Solo usuarios logueados pueden acceder a las tablas (los anónimos, nada).
+grant select, insert, update, delete
+  on public.libros, public.contactos, public.prestamos to authenticated;
+revoke all on public.libros, public.contactos, public.prestamos from anon;
+
 alter table public.libros    enable row level security;
 alter table public.contactos enable row level security;
 alter table public.prestamos enable row level security;
